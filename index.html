@@ -6,7 +6,7 @@
     <title>漫畫文字飄浮空間 (GitHub 完美版)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <style>
-        /* 全域樣式：營造黑白漫畫感 */
+/* 全域樣式：營造黑白漫畫感 */
         body {
             margin: 0;
             padding: 0;
@@ -19,7 +19,15 @@
             font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
         }
 
-        /* 飄浮文字的基礎樣式（漫畫對話框風格） */
+        /* 確保文字容器範圍是整個螢幕 */
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 飄浮文字的基礎樣式 */
         .floating-text {
             position: absolute;
             white-space: nowrap;
@@ -32,24 +40,29 @@
             box-shadow: 5px 5px 0px black; /* 漫畫風硬陰影 */
             border-radius: 10px;
             user-select: none;
-            pointer-events: none;
+            pointer-events: none; /* 讓滑鼠可以穿透 */
+            
+            /* 預設動畫：從最底下往上飄 */
+            bottom: -100px; /* 初始位置藏在螢幕下方 */
             animation: floatUp linear infinite;
         }
 
-        /* 飄浮動畫效果 */
+        /* 修正後的飄浮動畫效果 */
         @keyframes floatUp {
-            0 {
-                transform: translateY(100vh) rotate(var(--rot));
+            0% {
+                /* 從螢幕最底部（y軸為0）開始，帶有隨機角度 */
+                transform: translateY(0) rotate(var(--rot));
                 opacity: 0;
             }
-            10% {
-                opacity: 1;
+            5% {
+                opacity: 1; /* 剛出現時快速浮現 */
             }
             90% {
                 opacity: 1;
             }
             100% {
-                transform: translateY(-200px) rotate(var(--rot));
+                /* 一路往上飛，直到飛出螢幕頂端（負的 115vh 確保徹底離開畫面） */
+                transform: translateY(-115vh) rotate(var(--rot));
                 opacity: 0;
             }
         }
