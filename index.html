@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>漫畫文字飄浮空間 (網頁版)</title>
+    <title>漫畫文字飄浮空間 (GitHub 完美版)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <style>
         /* 全域樣式：營造黑白漫畫感 */
         body {
@@ -31,15 +32,13 @@
             box-shadow: 5px 5px 0px black; /* 漫畫風硬陰影 */
             border-radius: 10px;
             user-select: none;
-            pointer-events: none; /* 讓滑鼠可以穿透 */
-            
-            /* 預設動畫：向上飄浮 */
+            pointer-events: none;
             animation: floatUp linear infinite;
         }
 
         /* 飄浮動畫效果 */
         @keyframes floatUp {
-            0% {
+            0 {
                 transform: translateY(100vh) rotate(var(--rot));
                 opacity: 0;
             }
@@ -73,68 +72,62 @@
 </head>
 <body>
 
-    <div id="loader">正在讀取 Google 網頁資料...</div>
+    <div id="loader">正在召喚 CSV 漫畫文字...</div>
     <div id="container"></div>
 
     <script>
         // === 設定區 ===
-        const originalUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTdrgkVAQ_gPthzrZSvdEQ3SnpKWdXjyTTJacMH-k5udPhBeFU4TsbXfD4p8Td0oZv9-CWu83fFGeE5/pubhtml'; 
-	// 使用剛剛成功打通的 corsproxy.io 橋樑
-        const htmlUrl = 'https://corsproxy.io/?' + encodeURIComponent(originalUrl);
+        // 請在此處貼上您最新的「逗點分隔值 (.csv)」發布網址
+        const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTdrgkVAQ_gPthzrZSvdEQ3SnpKWdXjyTTJacMH-k5udPhBeFU4TsbXfD4p8Td0oZv9-CWu83fFGeE5/pub?output=csv'; 
+        // =============
 
         // 啟動載入
-        fetchGoogleHtml();
+        fetchCSV();
 
-        function fetchGoogleHtml() {
-            fetch(htmlUrl)
-                .then(response => {
-                    if (!response.ok) throw new Error('網路回應不成功');
-                    return response.text();
-                })
-                .then(htmlText => {
+        function fetchCSV() {
+            Papa.parse(csvUrl, {
+                download: true,
+                header: false, // 關閉 header，直接暴力掃描整張表
+                skipEmptyLines: true,
+                complete: function(results) {
                     document.getElementById('loader').style.display = 'none';
-
-                    // 升級解析邏輯：直接用正規表達式抓取所有 <td>...</td> 裡面的文字
-                    // 這樣不管 Google 格式怎麼變，都一定挖得出字
-                    const regex = /<td[^>]*>([^<]+)<\/td>/g;
+                    const rows = results.data;
                     const textList = [];
-                    let match;
+                    
+                    // 黑名單：只要文字包含這些系統字、布林值，一律丟掉不顯示
+                    const blacklist = ['null', 'true', 'false', 'undefined', 'content', '文字欄位'];
 
-                    while ((match = regex.exec(htmlText)) !== null) {
-                        const text = match[1].trim();
-                        // 過濾掉空值、純數字、試算表欄位英文字(如A, B, C)或不必要的系統字
-                        if (text && text !== '​' && isNaN(text) && text.length > 1) {
-                            textList.push(text);
-                        }
-                    }
-
-                    // 備用機制：如果上面的 td 抓法還是空的，就把所有網頁裡的純文字都抓出來（防呆）
-                    if (textList.length === 0) {
-                        const cleanText = htmlText.replace(/<[^>]*>/g, ' '); // 濾掉所有 HTML 標籤
-                        const words = cleanText.split(/[\s,]+/); // 用空格切開
-                        words.forEach(w => {
-                            const t = w.trim();
-                            // 撈出長度大於1的非純數字文字（避免撈到一堆樣式代碼）
-                            if(t && isNaN(t) && t.length > 1 && !t.includes('{') && !t.includes(';')) {
-                                textList.push(t);
+                    // 掃描 CSV 裡面的每一個格子
+                    rows.forEach(row => {
+                        row.forEach(cell => {
+                            if (cell) {
+                                const text = cell.trim();
+                                
+                                // 過濾條件：
+                                // 1. 不能是空的
+                                // 2. 不能是純數字 (例如隱藏的 ID)
+                                // 3. 長度必須大於 1 個字
+                                // 4. 不能在黑名單裡面
+                                if (text && isNaN(text) && text.length > 1 && !blacklist.includes(text.toLowerCase())) {
+                                    textList.push(text);
+                                }
                             }
                         });
-                    }
-
+                    });
+                    
                     if (textList.length === 0) {
-                        alert("連線成功，但防呆機制也找不到任何文字，請確認試算表內真的有輸入中文字喔！");
+                        alert("CSV 解析成功，但過濾後沒有留下任何有效文字，請確認試算表內有輸入文字！");
                         return;
                     }
-
-                    console.log("成功解析出的文字庫:", textList);
                     
-                    // 開始製造飄浮文字
+                    console.log("最終乾淨的文字庫:", textList);
                     startFloating(textList);
-                })
-                .catch(err => {
-                    console.error("讀取網頁失敗:", err);
-                    document.getElementById('loader').innerText = "讀取網頁失敗，請確認網路連線。";
-                });
+                },
+                error: function(err) {
+                    console.error("CSV 讀取失敗:", err);
+                    document.getElementById('loader').innerText = "CSV 讀取失敗。";
+                }
+            });
         }
 
         function startFloating(texts) {
