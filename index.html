@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>漫畫文字飄浮空間 (三欄錯開版)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        /* 全域樣式：營造黑白漫畫感 */
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+            background-image: radial-gradient(#ccc 1px, transparent 1px);
+            background-size: 20px 20px; /* 漫畫網點背景效果 */
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+        }
+
+        /* 確保文字容器範圍是整個螢幕 */
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 飄浮對話框群組容器 */
+        .comic-group {
+            position: absolute;
+            display: flex;
+            align-items: flex-start; /* 靠上對齊，方便後面用 margin 做出上下錯開效果 */
+            gap: 12px; /* 三欄之間的左右間距 */
+            bottom: -150px; /* 初始位置在螢幕下方 */
+            animation: floatUp linear infinite;
+        }
+
+        /* 漫畫風對話框基礎樣式 */
+        .comic-box {
+            white-space: nowrap;
+            background: white;
+            color: black;
+            border: 3px solid black;
+            padding: 6px 12px;
+            font-weight: bold;
+            box-shadow: 4px 4px 0px black; /* 漫畫風硬陰影 */
+            user-select: none;
+        }
+
+        /* 1. 發起者樣式：對話框圓角 */
+        .box-sender {
+            border-radius: 20px;
+            font-size: 14px;
+            background-color: #fff;
+            margin-top: 15px; /* 垂直向下錯開 */
+        }
+
+        /* 2. 感謝的話樣式：傳統方圓對話框，字體放大 */
+        .box-message {
+            border-radius: 8px;
+            font-size: 20px;
+            background-color: #fff;
+            margin-top: 0px; /* 保持原位 */
+            box-shadow: 6px 6px 0px black;
+        }
+
+        /* 3. 對象樣式：對話框圓角 */
+        .box-receiver {
+            border-radius: 20px;
+            font-size: 14px;
+            background-color: #f0f0f0; /* 微灰色做出區隔 */
+            margin-top: 25px; /* 垂直向下錯開更多，形成階梯狀或錯落感 */
+        }
+
+        /* 飄浮動畫效果 */
+        @keyframes floatUp {
+            0% {
+                transform: translateY(0) rotate(var(--rot));
+                opacity: 0;
+            }
+            5% {
+                opacity: 1; /* 剛出現時快速浮現 */
+            }
+            90% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(-120vh) rotate(var(--rot));
+                opacity: 0;
+            }
+        }
+
+        /* 載入中提示 */
+        #loader {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            font-weight: bold;
+            background: white;
+            padding: 20px;
+            border: 4px solid black;
+            box-shadow: 8px 8px 0px black;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loader">正在召喚 CSV 漫畫文字...</div>
+    <div id="container"></div>
+
+    <script>
+        // === 設定區 ===
+        // 請確保此處是您最新的「逗點分隔值 (.csv)」發布網址
+        const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTdrgkVAQ_gPthzrZSvdEQ3SnpKWdXjyTTJacMH-k5udPhBeFU4TsbXfD4p8Td0oZv9-CWu83fFGeE5/pub?output=csv'; 
+        // =============
+
+        // 啟動載入
+        fetchCSV();
+
+        function fetchCSV() {
+            Papa.parse(csvUrl, {
+                download: true,
+                header: false, // 設為 false，方便我們手動精準控制每一列
+                skipEmptyLines: true,
+                complete: function(results) {
+                    document.getElementById('loader').style.display = 'none';
+                    const rows = results.data;
+                    const validGroups = [];
+                    
+                    // 從第 2 列開始讀取 (index 1)，直接跳過第 1 列的標題欄（發起者,感謝的話,對象）
+                    for (let i = 1; i < rows.length; i++) {
+                        const row = rows[i];
+                        
+                        // 確保這一列至少有資料，並提取三欄
+                        if (row && row.length >= 2) {
+                            const sender = row[0] ? row[0].trim() : '';
+                            const message = row[1] ? row[1].trim() : '';
+                            const receiver = row[2] ? row[2].trim() : ''; // 有可能沒填對象，給空字串
+                            
+                            // 只要最重要的「感謝的話」有填寫，就納入資料庫
+                            if (message) {
+                                validGroups.push({
+                                    sender: sender || '神祕人', // 若沒填發起者，預設顯示神祕人
+                                    message: message,
+                                    receiver: receiver
+                                });
+                            }
+                        }
+                    }
+                    
+                    if (validGroups.length === 0) {
+                        alert("沒有提取到有效的內容，請確認試算表除了標題外是否有填寫資料！");
+                        return;
+                    }
+                    
+                    console.log("成功載入群組資料:", validGroups);
+                    startFloating(validGroups);
+                },
+                error: function(err) {
+                    console.error("CSV 讀取失敗:", err);
+                    document.getElementById('loader').innerText = "CSV 讀取失敗。";
+                }
+            });
+        }
+
+        function startFloating(groups) {
+            const container = document.getElementById('container');
+            
+            setInterval(() => {
+                // 隨機挑選一列的三欄組合
+                const randomData = groups[Math.floor(Math.random() * groups.length)];
+                
+                // 建立一個大群組容器
+                const groupNode = document.createElement('div');
+                groupNode.className = 'comic-group';
+                
+                // 1. 建立發起者對話框
+                const senderBox = document.createElement('div');
+                senderBox.className = 'comic-box box-sender';
+                senderBox.innerText = randomData.sender;
+                groupNode.appendChild(senderBox);
+                
+                // 2. 建立感謝的話對話框
+                const messageBox = document.createElement('div');
+                messageBox.className = 'comic-box box-message';
+                messageBox.innerText = randomData.message;
+                groupNode.appendChild(messageBox);
+                
+                // 3. 建立對象對話框（如果有填寫才顯示）
+                if (randomData.receiver) {
+                    const receiverBox = document.createElement('div');
+                    receiverBox.className = 'comic-box box-receiver';
+                    receiverBox.innerText = `@ ${randomData.receiver}`;
+                    groupNode.appendChild(receiverBox);
+                }
+                
+                // 隨機設定群組樣式參數（讓每一組噴發的位置和速度不同）
+                const leftPos = Math.random() * 65; // 稍微縮小範圍以免最右邊的字飄出螢幕外
+                const duration = 8 + Math.random() * 8; // 稍微放慢速度（8~16秒），讓長句子比較好閱讀
+                const rotation = (Math.random() * 16) - 8; // 整組微歪斜 (-8deg ~ 8deg)
+                
+                // 套用樣式
+                groupNode.style.left = `${leftPos}%`;
+                groupNode.style.animationDuration = `${duration}s`;
+                groupNode.style.setProperty('--rot', `${rotation}deg`);
+                
+                // 放入主要容器
+                container.appendChild(groupNode);
+                
+                // 動畫結束後自動刪除節點
+                setTimeout(() => {
+                    groupNode.remove();
+                }, duration * 1000);
+
+            }, 1200); // 每 1.2 秒噴發一組，留給眼睛一點閱讀時間
+        }
+    </script>
+</body>
+</html>
